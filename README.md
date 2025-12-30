@@ -7,6 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![AWS Lambda](https://img.shields.io/badge/AWS-Lambda-orange.svg)](https://aws.amazon.com/lambda/)
+[![AWS SAM](https://img.shields.io/badge/AWS-SAM-orange.svg)](https://aws.amazon.com/serverless/sam/)
 
 ---
 
@@ -32,22 +33,16 @@ This project demonstrates how to build, break, and scale an AI-powered code docu
 
 ### What This Project Teaches
 
-**Week 1 Core Learning Outcomes:**
+**Core Learning Outcomes:**
 - Build serverless AI applications with AWS Lambda + Claude API
 - Handle large context windows and token management
-- Implement cost tracking and optimization (₹240 for 50,000 lines)
+- Implement cost tracking and optimization
 - Scale from single-file to full repository processing
-- Deploy production-ready infrastructure with monitoring
+- Deploy production-ready infrastructure with AWS SAM
+- Monitor and debug distributed systems
 
-### Real-World Impact
 
-- **Point it at 50,000 lines of undocumented Python** → Get comprehensive docs in 8 minutes for ₹240
-- **Integrate as GitHub Action** → Every PR gets auto-documented (companies pay ₹8L/year for this)
-- **Cost Optimization** → Reduce API costs from ₹4,000 to ₹240 per repo with smart caching
-
----
-
-## 🚀 Learning Journey
+## 🚀 Building Journey
 
 ### The Build → Break → Fix Approach
 
@@ -98,7 +93,7 @@ This project demonstrates how to build, break, and scale an AI-powered code docu
 
 **Cost:** ~₹20 per file (average 1,000 lines)
 
-**Time:** 30-60 seconds per file
+**Time:** <60 seconds per file
 
 ---
 
@@ -107,8 +102,8 @@ This project demonstrates how to build, break, and scale an AI-powered code docu
 **What Happens When We Scale:**
 
 1. **Large Repository (50,000 lines)**
-   - Lambda timeout (15-minute limit)
-   - Memory exhaustion (3GB limit)
+   - Lambda timeout (5-minute limit)
+   - Memory exhaustion (512MB limit)
    - Cost: ₹4,000+ (no caching)
 
 2. **API Rate Limits**
@@ -148,7 +143,7 @@ This project demonstrates how to build, break, and scale an AI-powered code docu
 4. **Caching Layer**
    - Hash-based file caching
    - DynamoDB for cache storage
-   - 80% cost reduction on re-runs
+   - Huge cost reduction on re-runs
 
 5. **Basic Monitoring**
    - CloudWatch logs
@@ -177,37 +172,34 @@ This project demonstrates how to build, break, and scale an AI-powered code docu
    - Quality metrics (coverage %)
 
 10. **Multi-Language Support**
+    - Python
     - JavaScript/TypeScript
     - Java
     - Go
-
-**Cost After Optimization:** ₹240 per 50,000-line repository (vs ₹4,000)
-
-**Time:** 8 minutes for 50,000 lines
 
 ---
 
 ## 🛠 Tech Stack
 
 ### Core AI Stack
-- **LLM:** Claude 3.5 Sonnet (Anthropic API)
+- **LLM:** Claude Sonnet 4 (Anthropic API)
 - **Prompt Engineering:** Few-shot learning, structured outputs
-- **Token Management:** Tiktoken for counting
+- **Token Management:** Built-in token counting
 - **Context Window:** Up to 200K tokens
 
 ### AWS Infrastructure
 - **Compute:** AWS Lambda (Phase 1), ECS Fargate (Phase 3)
 - **API:** API Gateway REST API
 - **Storage:** S3 (docs), DynamoDB (cache)
-- **Monitoring:** CloudWatch, X-Ray
-- **Secrets:** AWS Secrets Manager
-- **Orchestration:** Step Functions (Phase 3)
+- **Monitoring:** CloudWatch, X-Ray (optional)
+- **Secrets:** Environment variables, Secrets Manager (optional)
+- **Orchestration:** Step Functions (Phase 3, optional)
 
 ### Development Stack
 - **Language:** Python 3.9+
-- **IaC:** Terraform
+- **IaC:** AWS SAM (Serverless Application Model)
 - **Testing:** pytest
-- **CI/CD:** GitHub Actions
+- **CI/CD:** GitHub Actions (optional)
 - **Local Dev:** SAM CLI
 
 ---
@@ -291,11 +283,10 @@ This project demonstrates how to build, break, and scale an AI-powered code docu
 - Python 3.9+
 - AWS Account with CLI configured
 - Anthropic API Key
-- Terraform 1.0+
+- AWS SAM CLI
 
 # Optional
 - Docker (for local testing)
-- SAM CLI (for local Lambda development)
 ```
 
 ### Installation
@@ -317,34 +308,42 @@ cp .env.example .env
 
 ```bash
 ANTHROPIC_API_KEY=your_key_here
-AWS_REGION=us-east-1
-COST_PER_1K_INPUT_TOKENS=0.003  # $3 per million tokens
-COST_PER_1K_OUTPUT_TOKENS=0.015  # $15 per million tokens
+AWS_REGION=ap-south-1
+COST_PER_1M_INPUT_TOKENS=3.00  # $3 per million tokens
+COST_PER_1M_OUTPUT_TOKENS=15.00  # $15 per million tokens
 ```
 
 ### Local Testing (Phase 1)
 
 ```bash
-# Run the POC locally
-python src/phase1_poc/test_local.py
+# Test locally with SAM
+cd infrastructure/sam
+sam build
+sam local start-api
 
-# Test with sample file
-python src/phase1_poc/lambda_function.py --file tests/test_data/small_repo/sample.py
+# In another terminal, test the API
+curl -X POST http://localhost:3000/document \
+  -H "Content-Type: application/json" \
+  -d '{"file_path": "test.py", "file_content": "def hello(): return \"world\""}'
 ```
 
 ### Deploy Phase 1 (Lambda Only)
 
 ```bash
-cd infrastructure/terraform/phase1
-terraform init
-terraform plan
-terraform apply
+cd infrastructure/sam
+
+# Configure your API key in samconfig.toml
+# Then build and deploy
+sam build
+sam deploy --guided
 
 # Test the deployed API
-curl -X POST https://your-api-gateway-url/dev/document \
+curl -X POST https://your-api-id.execute-api.ap-south-1.amazonaws.com/dev/document \
   -H "Content-Type: application/json" \
   -d '{"file_path": "sample.py", "file_content": "..."}'
 ```
+
+**Detailed Deployment Guide:** See `infrastructure/sam/DEPLOYMENT-GUIDE.md`
 
 ---
 
@@ -397,13 +396,14 @@ curl -X POST https://your-api-gateway-url/dev/document \
 - [x] Basic cost tracking
 - [x] Lambda deployment
 - [x] API Gateway endpoint
+- [x] Web frontend interface
 
-#### Phase 3 (Production - Basic)
-- [x] Intelligent chunking
-- [x] Cost tracking with CloudWatch
-- [x] Rate limiting with exponential backoff
-- [x] DynamoDB caching layer
-- [x] Error handling and logging
+#### Phase 3 (Production - Homework)
+- [ ] Intelligent chunking
+- [ ] Cost tracking with CloudWatch
+- [ ] Rate limiting with exponential backoff
+- [ ] DynamoDB caching layer
+- [ ] Error handling and logging
 
 ### Roadmap (Advanced Features)
 
@@ -462,34 +462,47 @@ python tests/integration/test_rate_limits.py
 ### Phase 1 Deployment (Lambda Only)
 
 ```bash
-cd infrastructure/terraform/phase1
-terraform init
-terraform apply -var="anthropic_api_key=$ANTHROPIC_API_KEY"
+cd infrastructure/sam
+
+# First time deployment
+sam build
+sam deploy --guided
+
+# Subsequent deployments
+sam build
+sam deploy
 ```
 
 **Resources Created:**
 - Lambda function (512MB, 5min timeout)
 - API Gateway REST API
 - CloudWatch Log Group
+- CloudWatch Dashboard
 - IAM roles and policies
 
 **Estimated Cost:** ₹200-500/month (based on usage)
+
+**Detailed Guide:** See `infrastructure/sam/DEPLOYMENT-GUIDE.md`
 
 ---
 
 ### Phase 3 Deployment (Production)
 
 ```bash
-cd infrastructure/terraform/phase3
-terraform init
-terraform apply
+cd infrastructure/sam
+
+# Update template.yaml with Phase 3 resources
+# Add DynamoDB, ECS, etc.
+
+sam build
+sam deploy
 ```
 
 **Additional Resources:**
-- ECS Fargate cluster
 - DynamoDB table (caching)
+- ECS Fargate cluster (optional)
 - S3 bucket (documentation storage)
-- Application Load Balancer
+- Application Load Balancer (optional)
 - Auto-scaling policies
 - CloudWatch dashboards
 
@@ -512,7 +525,10 @@ Intelligent-Code-Documentation-Generator/
 │   │   ├── code_analyzer.py           # Python code parsing
 │   │   ├── claude_client.py           # Claude API wrapper
 │   │   ├── cost_tracker.py            # Token/cost tracking
-│   │   └── test_local.py              # Local testing script
+│   │   ├── models.py                  # Pydantic data models
+│   │   ├── config.py                  # Configuration
+│   │   ├── utils.py                   # Helper functions
+│   │   └── requirements.txt           # Lambda dependencies
 │   │
 │   ├── phase2_breaking/               # Phase 2: Breaking scenarios
 │   │   ├── large_repo_test.py         # Test large repositories
@@ -521,12 +537,11 @@ Intelligent-Code-Documentation-Generator/
 │   │
 │   ├── phase3_production/             # Phase 3: Production code
 │   │   ├── lambda_function.py         # Optimized Lambda handler
-│   │   ├── chunking_strategy.py       # Smart file chunking
-│   │   ├── caching_layer.py           # DynamoDB cache
-│   │   ├── rate_limiter.py            # Rate limiting logic
-│   │   ├── parallel_processor.py      # ECS task coordination
-│   │   ├── cost_tracker.py            # Enhanced cost tracking
-│   │   └── monitoring.py              # CloudWatch metrics
+│   │   ├── cache_manager.py           # DynamoDB cache
+│   │   ├── code_chunker.py            # Smart file chunking
+│   │   ├── chunk_processor.py         # Process multiple chunks
+│   │   ├── retry_logic.py             # Exponential backoff
+│   │   └── requirements.txt           # Production dependencies
 │   │
 │   └── shared/                        # Shared utilities
 │       ├── models.py                  # Data models (Pydantic)
@@ -534,29 +549,20 @@ Intelligent-Code-Documentation-Generator/
 │       └── utils.py                   # Helper functions
 │
 ├── infrastructure/
-│   ├── terraform/
-│   │   ├── phase1/                    # Phase 1 infrastructure
-│   │   │   ├── main.tf
-│   │   │   ├── lambda.tf
-│   │   │   ├── api_gateway.tf
-│   │   │   └── outputs.tf
-│   │   │
-│   │   ├── phase3/                    # Phase 3 infrastructure
-│   │   │   ├── main.tf
-│   │   │   ├── ecs.tf
-│   │   │   ├── dynamodb.tf
-│   │   │   ├── s3.tf
-│   │   │   └── monitoring.tf
-│   │   │
-│   │   └── modules/                   # Reusable modules
-│   │       ├── lambda/
-│   │       ├── ecs/
-│   │       └── monitoring/
-│   │
-│   └── scripts/
-│       ├── deploy.sh                  # Deployment script
-│       ├── test.sh                    # Testing script
-│       └── cost_estimate.sh           # Cost estimation
+│   └── sam/                           # AWS SAM infrastructure
+│       ├── template.yaml              # SAM template (CloudFormation)
+│       ├── samconfig.toml             # SAM CLI configuration
+│       ├── deploy.sh                  # Helper deployment script
+│       ├── DEPLOYMENT-GUIDE.md        # Complete deployment guide
+│       ├── QUICK-REFERENCE.md         # Command cheat sheet
+│       ├── TROUBLESHOOTING.md         # Common issues
+│       └── events/                    # Test events
+│           ├── sample-request.json
+│           └── class-example.json
+│
+├── frontend/
+│   ├── index.html                     # Web UI (single file)
+│   └── README.md                      # Frontend documentation
 │
 ├── tests/
 │   ├── unit/                          # Unit tests
@@ -569,22 +575,29 @@ Intelligent-Code-Documentation-Generator/
 │   │   └── test_repositories.py
 │   │
 │   └── test_data/                     # Test data
-│       ├── small_repo/                # Small test files
-│       └── large_repo/                # Large test repository
-│
-├── github_action/
-│   └── document-on-pr.yml             # GitHub Action workflow
+│       └── small_repo/                # Small test files
 │
 └── docs/
     ├── architecture/
-    │   ├── phase1-poc.md              # Phase 1 architecture
+    │   ├── phase1-architecture.md     # Phase 1 architecture (12K words)
     │   ├── phase2-breaking.md         # Breaking scenarios
     │   ├── phase3-production.md       # Production architecture
-    │   └── diagrams/                  # Architecture diagrams
+    │   ├── diagrams/                  # 6 Mermaid diagrams
+    │   │   ├── phase1-system-architecture.mermaid
+    │   │   ├── phase1-request-flow.mermaid
+    │   │   ├── phase1-component-flow.mermaid
+    │   │   ├── phase1-data-model.mermaid
+    │   │   ├── phase1-decision-flow.mermaid
+    │   │   └── phase1-vs-phase3-comparison.mermaid
+    │   └── README.md
+    │
+    ├── problem-statement/
+    │   ├── INDEX.md                   # Problem overview
+    │   ├── user-scenarios.md          # User stories
+    │   └── technical-requirements.md  # Technical specs
     │
     ├── cost-analysis.md               # Detailed cost breakdown
-    ├── setup-guide.md                 # Setup instructions
-    └── troubleshooting.md             # Common issues and fixes
+    └── setup-guide.md                 # Setup instructions
 ```
 
 ---
@@ -593,9 +606,10 @@ Intelligent-Code-Documentation-Generator/
 
 - **[Setup Guide](docs/setup-guide.md)** - Detailed setup instructions
 - **[Architecture Overview](docs/architecture/)** - System architecture for each phase
+- **[SAM Deployment Guide](infrastructure/sam/DEPLOYMENT-GUIDE.md)** - Complete deployment walkthrough
 - **[Cost Analysis](docs/cost-analysis.md)** - Detailed cost breakdown and optimization
 - **[Breaking Scenarios](docs/architecture/phase2-breaking.md)** - What fails and why
-- **[Production Patterns](docs/architecture/phase3-production.md)** - Production best practices
+- **[Frontend Guide](frontend/README.md)** - Web interface documentation
 
 ---
 
@@ -607,12 +621,13 @@ By completing this project, you will:
 ✅ Handle large context windows and token optimization  
 ✅ Implement production-ready cost tracking (per request, per user)  
 ✅ Scale from single-file to full repository processing  
-✅ Deploy with Infrastructure as Code (Terraform)  
-✅ Add monitoring and observability (CloudWatch, X-Ray)  
+✅ Deploy with Infrastructure as Code (AWS SAM)  
+✅ Add monitoring and observability (CloudWatch)  
 ✅ Optimize costs by 85% using caching and chunking  
 ✅ Handle API rate limits with exponential backoff  
 ✅ Process 50,000 lines in 8 minutes for ₹240  
-✅ Build GitHub Actions for automated documentation  
+✅ Build web interfaces for AI applications  
+✅ Test locally before deploying to AWS  
 
 ---
 
@@ -660,7 +675,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - [Claude API Documentation](https://docs.anthropic.com/)
 - [AWS Lambda Best Practices](https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html)
-- [Terraform AWS Provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
+- [AWS SAM Documentation](https://docs.aws.amazon.com/serverless-application-model/)
+- [SAM CLI Reference](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-command-reference.html)
 
 ---
 
