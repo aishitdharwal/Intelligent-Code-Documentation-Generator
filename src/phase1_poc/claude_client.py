@@ -4,10 +4,10 @@ Claude API client wrapper.
 Handles communication with Anthropic's Claude API for documentation generation.
 """
 import logging
+import os
 from typing import Optional
 from anthropic import Anthropic
-from ..shared.config import config
-from ..shared.models import CostMetrics
+from models import CostMetrics
 
 
 logger = logging.getLogger(__name__)
@@ -23,16 +23,16 @@ class ClaudeClient:
         Initialize Claude client.
         
         Args:
-            api_key: Anthropic API key (uses config if not provided)
+            api_key: Anthropic API key (uses env var if not provided)
         """
-        self.api_key = api_key or config.anthropic.api_key
+        self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
         if not self.api_key:
             raise ValueError("Anthropic API key is required")
         
         self.client = Anthropic(api_key=self.api_key)
-        self.model = config.anthropic.model
-        self.max_tokens = config.anthropic.max_tokens
-        self.temperature = config.anthropic.temperature
+        self.model = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-20250514")
+        self.max_tokens = int(os.environ.get("MAX_TOKENS", "4096"))
+        self.temperature = float(os.environ.get("TEMPERATURE", "0.0"))
         
         logger.info(f"Initialized Claude client with model: {self.model}")
     
@@ -81,7 +81,7 @@ class ClaudeClient:
             logger.info(
                 f"Generated documentation for {file_path}. "
                 f"Tokens: {cost_metrics.total_tokens}, "
-                f"Cost: {cost_metrics.total_cost:.4f} USD"
+                f"Cost: ${cost_metrics.total_cost:.4f} USD"
             )
             
             return documentation, cost_metrics
@@ -151,8 +151,8 @@ Format the documentation in clear, professional Markdown. Be concise but compreh
             CostMetrics object
         """
         # Get cost configuration (in USD per 1M tokens)
-        input_cost_per_1m = config.cost.cost_per_1m_input_tokens
-        output_cost_per_1m = config.cost.cost_per_1m_output_tokens
+        input_cost_per_1m = float(os.environ.get("COST_PER_1M_INPUT_TOKENS", "3.00"))
+        output_cost_per_1m = float(os.environ.get("COST_PER_1M_OUTPUT_TOKENS", "15.00"))
         
         # Calculate costs
         input_cost = (input_tokens / 1_000_000) * input_cost_per_1m
@@ -167,20 +167,3 @@ Format the documentation in clear, professional Markdown. Be concise but compreh
             output_cost=output_cost,
             total_cost=total_cost
         )
-    
-    def estimate_tokens(self, text: str) -> int:
-        """
-        Estimate token count for text.
-        
-        Note: This is a rough estimation. Actual token count may vary.
-        Claude uses a different tokenizer than GPT models.
-        
-        Args:
-            text: Text to estimate
-            
-        Returns:
-            Estimated token count
-        """
-        # Rough estimation: ~4 characters per token on average
-        # This is a simplification; actual tokenization varies
-        return len(text) // 4

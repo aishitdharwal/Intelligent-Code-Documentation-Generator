@@ -6,8 +6,8 @@ Parses Python source code and extracts structural information.
 import ast
 import logging
 from typing import List, Optional
-from ..shared.models import CodeElement, FileAnalysis, FileType
-from ..shared.utils import count_lines
+from models import CodeElement, FileAnalysis, FileType
+from utils import count_lines
 
 
 logger = logging.getLogger(__name__)

@@ -6,11 +6,20 @@ Tracks token usage and costs for Claude API calls.
 import logging
 from typing import List, Dict, Any
 from datetime import datetime
-from ..shared.models import CostMetrics
-from ..shared.utils import format_currency
+from models import CostMetrics
 
 
 logger = logging.getLogger(__name__)
+
+
+def format_currency(amount: float, currency: str = "USD") -> str:
+    """Format amount as currency string."""
+    if currency == "INR":
+        return f"₹{amount:.2f}"
+    elif currency == "USD":
+        return f"${amount:.2f}"
+    else:
+        return f"{amount:.2f} {currency}"
 
 
 class CostTracker:

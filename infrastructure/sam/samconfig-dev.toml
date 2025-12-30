@@ -1,0 +1,10 @@
+# Environment-specific parameter files for SAM deployment
+# Use different files for dev, staging, and prod environments
+
+# Development Environment
+# For testing and development purposes
+Parameters:
+  AnthropicApiKey: "YOUR_ANTHROPIC_API_KEY_HERE"
+  CostPerMillionInputTokens: 3.00
+  CostPerMillionOutputTokens: 15.00
+  Environment: "dev"

@@ -1,0 +1,52 @@
+graph TD
+    Start((Start:<br/>Document Request)) --> Validate{Valid<br/>Request?}
+    
+    Validate -->|No| Error1[Return 400 Error:<br/>Missing fields]
+    Validate -->|Yes| ExtCheck{.py file?}
+    
+    ExtCheck -->|No| Error2[Return 400 Error:<br/>Invalid file type]
+    ExtCheck -->|Yes| Parse[Parse Code<br/>with AST]
+    
+    Parse --> SyntaxCheck{Valid<br/>Syntax?}
+    
+    SyntaxCheck -->|No| Error3[Return 400 Error:<br/>Syntax error]
+    SyntaxCheck -->|Yes| Extract[Extract:<br/>Functions, Classes,<br/>Imports]
+    
+    Extract --> CheckSize{File > 5000<br/>lines?}
+    
+    CheckSize -->|Yes| Warning[Continue with<br/>WARNING: May timeout]
+    CheckSize -->|No| BuildPrompt[Build<br/>Documentation<br/>Prompt]
+    Warning --> BuildPrompt
+    
+    BuildPrompt --> CallAPI[Call Claude API<br/>Sonnet-4]
+    
+    CallAPI --> APISuccess{API Call<br/>Success?}
+    
+    APISuccess -->|No| Retry{Retries<br/>Left?}
+    Retry -->|Yes| Wait[Wait 1s]
+    Wait --> CallAPI
+    Retry -->|No| Error4[Return 500 Error:<br/>API failure]
+    
+    APISuccess -->|Yes| ParseResp[Parse Response<br/>Extract Docs]
+    
+    ParseResp --> CalcCost[Calculate:<br/>Token Cost]
+    
+    CalcCost --> BuildResult[Build<br/>DocumentationResult]
+    
+    BuildResult --> LogCost[Log Cost<br/>to CloudWatch]
+    
+    LogCost --> Success[Return 200 OK:<br/>Documentation +<br/>Metrics]
+    
+    Error1 --> End((End))
+    Error2 --> End
+    Error3 --> End
+    Error4 --> End
+    Success --> End
+    
+    style Start fill:#4CAF50,stroke:#1B5E20,stroke-width:2px,color:#fff
+    style End fill:#F44336,stroke:#B71C1C,stroke-width:2px,color:#fff
+    style Success fill:#2196F3,stroke:#0D47A1,stroke-width:2px,color:#fff
+    style Error1 fill:#FF9800,stroke:#E65100,stroke-width:2px
+    style Error2 fill:#FF9800,stroke:#E65100,stroke-width:2px
+    style Error3 fill:#FF9800,stroke:#E65100,stroke-width:2px
+    style Error4 fill:#FF9800,stroke:#E65100,stroke-width:2px
