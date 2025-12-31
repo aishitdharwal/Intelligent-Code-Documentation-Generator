@@ -4,12 +4,14 @@ Production Lambda Function with Caching - Simplified (no pydantic)
 This is the Phase 3 production version with:
 - DynamoDB caching (90% cost reduction)
 - No pydantic dependency (avoiding binary issues)
+- Decimal to float conversion for JSON serialization
 """
 import json
 import os
 import logging
 from datetime import datetime
 from typing import Dict, Any
+from decimal import Decimal
 
 # Local imports
 from cache_manager import CacheManager
@@ -34,6 +36,17 @@ claude_client = ClaudeClient(api_key=os.environ['ANTHROPIC_API_KEY'])
 cost_tracker = CostTracker()
 
 
+def decimal_to_float(obj):
+    """Convert Decimal to float for JSON serialization."""
+    if isinstance(obj, Decimal):
+        return float(obj)
+    elif isinstance(obj, dict):
+        return {k: decimal_to_float(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [decimal_to_float(v) for v in obj]
+    return obj
+
+
 def lambda_handler(event, context):
     """
     Main Lambda handler with caching support.
@@ -45,7 +58,7 @@ def lambda_handler(event, context):
     4. If HIT: return cached docs (cost = $0)
     5. If MISS: generate docs, save to cache
     """
-    logger.info(f"Request received: {context.request_id}")
+    logger.info(f"Request received: {context.aws_request_id}")
     
     try:
         # Parse request body
@@ -71,12 +84,15 @@ def lambda_handler(event, context):
             # CACHE HIT - Return cached documentation
             logger.info("Cache HIT - returning cached documentation")
             
+            # Convert Decimals to floats for JSON serialization
+            cached_clean = decimal_to_float(cached)
+            
             result = create_documentation_result(
-                request_id=context.request_id,
+                request_id=context.aws_request_id,
                 file_path=file_path,
-                documentation=cached['documentation'],
+                documentation=cached_clean['documentation'],
                 total_cost=0.0,  # Cache hit = $0
-                total_tokens=cached['metadata'].get('tokens', 0),
+                total_tokens=cached_clean['metadata'].get('tokens', 0),
                 processing_time=0.1,  # Fast cache retrieval
                 cached=True,
                 cache_key=file_hash
@@ -108,7 +124,7 @@ def lambda_handler(event, context):
             
             # Create result
             result = create_documentation_result(
-                request_id=context.request_id,
+                request_id=context.aws_request_id,
                 file_path=file_path,
                 documentation=documentation,
                 total_cost=cost_metrics['total_cost'],

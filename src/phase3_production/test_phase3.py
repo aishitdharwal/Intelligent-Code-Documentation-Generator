@@ -4,7 +4,7 @@ Test Phase 3 Deployment with Caching
 
 This script tests:
 1. Cache MISS on first request
-2. Cache HIT on second identical request
+2. Cache HIT on second identical request  
 3. 90% cost reduction verification
 """
 import requests
@@ -83,31 +83,32 @@ def calculate_average(numbers):
         elapsed = time.time() - start
         
         if response.status_code == 200:
-            data = response.json()['data']
+            first_data = response.json()['data']
             
             print(f"✅ SUCCESS")
             print(f"   Status Code: {response.status_code}")
             print(f"   Time: {elapsed:.2f} seconds")
-            print(f"   Cached: {data.get('cached', False)}")
-            print(f"   Cache Key: {data.get('cache_key', 'N/A')[:16]}...")
-            print(f"   Cost: ${data.get('total_cost', 0):.6f}")
-            print(f"   Tokens: {data.get('total_tokens', 0):,}")
+            print(f"   Cached: {first_data.get('cached', False)}")
+            print(f"   Cache Key: {first_data.get('cache_key', 'N/A')[:16]}...")
+            print(f"   Cost: ${first_data.get('total_cost', 0):.6f}")
+            print(f"   Tokens: {first_data.get('total_tokens', 0):,}")
             print()
             
-            if data.get('cached'):
+            if first_data.get('cached'):
                 print("⚠️  WARNING: First request should NOT be cached!")
             else:
                 print("✅ PASS: Cache MISS as expected")
             
             # Save for comparison
-            first_cost = data.get('total_cost', 0)
+            first_cost = first_data.get('total_cost', 0)
             first_time = elapsed
-            cache_key = data.get('cache_key', 'unknown')
+            first_cached = first_data.get('cached', False)
+            cache_key = first_data.get('cache_key', 'unknown')
             
             print()
             print("Documentation Preview:")
             print("-" * 80)
-            doc = data.get('documentation', '')
+            doc = first_data.get('documentation', '')
             print(doc[:300] + "..." if len(doc) > 300 else doc)
             print("-" * 80)
             
@@ -141,25 +142,26 @@ def calculate_average(numbers):
         elapsed = time.time() - start
         
         if response.status_code == 200:
-            data = response.json()['data']
+            second_data = response.json()['data']
             
             print(f"✅ SUCCESS")
             print(f"   Status Code: {response.status_code}")
             print(f"   Time: {elapsed:.2f} seconds")
-            print(f"   Cached: {data.get('cached', False)}")
-            print(f"   Cache Key: {data.get('cache_key', 'N/A')[:16]}...")
-            print(f"   Cost: ${data.get('total_cost', 0):.6f}")
-            print(f"   Tokens: {data.get('total_tokens', 0):,}")
+            print(f"   Cached: {second_data.get('cached', False)}")
+            print(f"   Cache Key: {second_data.get('cache_key', 'N/A')[:16]}...")
+            print(f"   Cost: ${second_data.get('total_cost', 0):.6f}")
+            print(f"   Tokens: {second_data.get('total_tokens', 0):,}")
             print()
             
-            if data.get('cached'):
+            if second_data.get('cached'):
                 print("✅ PASS: Cache HIT!")
                 print(f"   Speed improvement: {first_time/elapsed:.1f}x faster")
             else:
                 print("❌ FAIL: Should have been cached!")
             
-            second_cost = data.get('total_cost', 0)
+            second_cost = second_data.get('total_cost', 0)
             second_time = elapsed
+            second_cached = second_data.get('cached', False)
             
         else:
             print(f"❌ FAILED")
@@ -225,11 +227,11 @@ def calculate_average(numbers):
     print("=" * 80)
     print()
     
-    # Verification checklist
+    # Verification checklist - FIXED
     print("Verification Checklist:")
-    print(f"  [{'✅' if not data.get('cached') else '❌'}] First request is cache MISS")
+    print(f"  [{'✅' if not first_cached else '❌'}] First request is cache MISS")
     print(f"  [{'✅' if second_cost == 0 else '❌'}] Second request cost is $0")
-    print(f"  [{'✅' if data.get('cached') else '❌'}] Second request is cache HIT")
+    print(f"  [{'✅' if second_cached else '❌'}] Second request is cache HIT")
     print(f"  [{'✅' if speedup >= 5 else '❌'}] Cache is significantly faster")
     print()
 

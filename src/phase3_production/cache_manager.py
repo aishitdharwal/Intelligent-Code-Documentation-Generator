@@ -9,10 +9,22 @@ import boto3
 import os
 from typing import Dict, Optional
 from datetime import datetime
+from decimal import Decimal
 import logging
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+
+def float_to_decimal(obj):
+    """Convert floats to Decimal for DynamoDB."""
+    if isinstance(obj, float):
+        return Decimal(str(obj))
+    elif isinstance(obj, dict):
+        return {k: float_to_decimal(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [float_to_decimal(v) for v in obj]
+    return obj
 
 
 class CacheManager:
@@ -23,17 +35,11 @@ class CacheManager:
     - SHA256 hash-based keys
     - 24-hour TTL auto-expiration
     - Cost tracking
-    - Cache statistics
+    - Decimal conversion for DynamoDB
     """
     
     def __init__(self, table_name: str = None, region: str = None):
-        """
-        Initialize cache manager.
-        
-        Args:
-            table_name: DynamoDB table name (or from env CACHE_TABLE_NAME)
-            region: AWS region (or from env AWS_REGION)
-        """
+        """Initialize cache manager."""
         self.table_name = table_name or os.environ.get('CACHE_TABLE_NAME', 'doc-cache-dev')
         self.region = region or os.environ.get('AWS_REGION', 'us-east-1')
         
@@ -44,27 +50,11 @@ class CacheManager:
         logger.info(f"CacheManager initialized with table: {self.table_name}")
     
     def calculate_hash(self, content: str) -> str:
-        """
-        Calculate SHA256 hash of file content.
-        
-        Args:
-            content: File content as string
-            
-        Returns:
-            SHA256 hash as hex string (64 characters)
-        """
+        """Calculate SHA256 hash of file content."""
         return hashlib.sha256(content.encode('utf-8')).hexdigest()
     
     def get_cached(self, file_hash: str) -> Optional[Dict]:
-        """
-        Retrieve cached documentation from DynamoDB.
-        
-        Args:
-            file_hash: SHA256 hash of file content
-            
-        Returns:
-            Dictionary with cached data if found, None if cache miss
-        """
+        """Retrieve cached documentation from DynamoDB."""
         try:
             response = self.table.get_item(Key={'file_hash': file_hash})
             
@@ -87,29 +77,20 @@ class CacheManager:
         metadata: Dict,
         ttl_hours: int = 24
     ) -> bool:
-        """
-        Save documentation to DynamoDB cache.
-        
-        Args:
-            file_hash: SHA256 hash of file content
-            file_path: Original file path
-            documentation: Generated markdown documentation
-            metadata: Dict with cost, tokens, timestamp, etc.
-            ttl_hours: Cache expiration in hours (default 24)
-            
-        Returns:
-            True if save successful, False otherwise
-        """
+        """Save documentation to DynamoDB cache."""
         try:
             # Calculate TTL (Unix timestamp)
             ttl = int(time.time()) + (ttl_hours * 3600)
+            
+            # Convert all floats to Decimal for DynamoDB
+            metadata_decimal = float_to_decimal(metadata)
             
             # Create item
             item = {
                 'file_hash': file_hash,
                 'file_path': file_path,
                 'documentation': documentation,
-                'metadata': metadata,
+                'metadata': metadata_decimal,
                 'created_at': datetime.utcnow().isoformat(),
                 'ttl': ttl
             }
@@ -125,27 +106,11 @@ class CacheManager:
             return False
     
     def check_exists(self, file_hash: str) -> bool:
-        """
-        Quick check if item exists in cache.
-        
-        Args:
-            file_hash: SHA256 hash to check
-            
-        Returns:
-            True if exists, False if not
-        """
+        """Quick check if item exists in cache."""
         return self.get_cached(file_hash) is not None
     
     def delete_from_cache(self, file_hash: str) -> bool:
-        """
-        Delete item from cache.
-        
-        Args:
-            file_hash: SHA256 hash to delete
-            
-        Returns:
-            True if deleted, False if error
-        """
+        """Delete item from cache."""
         try:
             self.table.delete_item(Key={'file_hash': file_hash})
             logger.info(f"Deleted from cache: {file_hash[:16]}...")
@@ -155,16 +120,8 @@ class CacheManager:
             return False
     
     def get_cache_stats(self) -> Dict:
-        """
-        Get basic cache statistics.
-        
-        Note: Uses table item_count which may be delayed.
-        
-        Returns:
-            Dictionary with cache statistics
-        """
+        """Get basic cache statistics."""
         try:
-            # Get table metadata (item_count may be stale)
             table_info = self.table.table_status
             item_count = self.table.item_count
             
