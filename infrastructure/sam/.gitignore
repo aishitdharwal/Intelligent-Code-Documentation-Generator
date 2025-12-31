@@ -2,6 +2,13 @@
 .aws-sam/
 samconfig.toml
 
+# Environment files with secrets
+env.json
+.env
+.env.local
+*.pem
+*.key
+
 # Python
 __pycache__/
 *.py[cod]
@@ -11,12 +18,6 @@ __pycache__/
 *.egg-info/
 dist/
 build/
-
-# Environment files with secrets
-.env
-.env.local
-*.pem
-*.key
 
 # IDE
 .vscode/
