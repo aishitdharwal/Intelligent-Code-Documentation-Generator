@@ -1,41 +1,72 @@
 # Quick Deployment Reference
 
-Quick reference for building and deploying each phase.
+Quick reference for deploying Phase 3 with S3 + CloudFront frontend.
 
 ---
 
-## Phase 3: Production System
+## 🚀 Complete Deployment
 
-### Build and Deploy (Recommended)
+### Deploy Backend + Frontend Infrastructure
 
 ```bash
 cd infrastructure/sam
 
-# Build with container (CRITICAL for avoiding binary dependency issues)
+# Build (CRITICAL: use --use-container)
 sam build --template template-phase3.yaml --use-container
 
-# First deployment (guided setup)
+# Deploy (first time use --guided, subsequent deploys omit it)
 sam deploy --template template-phase3.yaml --guided
 
-# Subsequent deployments
-sam deploy --template template-phase3.yaml
+# Wait 10-15 minutes for CloudFront to provision
 ```
 
-### Get API Endpoint
+### Deploy Frontend to S3 + CloudFront
 
 ```bash
+cd ../scripts
+
+# Deploy frontend (auto-injects API endpoint)
+./deploy-frontend.sh
+
+# Frontend URL will be displayed at the end
+```
+
+**Total time:** 15-20 minutes (CloudFront takes longest)
+
+---
+
+## 📊 Get Deployment Info
+
+```bash
+# Get all outputs (API endpoint, Frontend URL, etc.)
 aws cloudformation describe-stacks \
   --stack-name doc-generator-phase3 \
   --region ap-south-1 \
-  --query 'Stacks[0].Outputs[?OutputKey==`ApiEndpoint`].OutputValue' \
-  --output text
+  --query 'Stacks[0].Outputs[*].[OutputKey,OutputValue]' \
+  --output table
 ```
 
-### Quick Test
+---
+
+## 🔄 Update Frontend Only
+
+When you make changes to `frontend/index.html`:
 
 ```bash
-cd ../src/phase3_production
+cd scripts
+./deploy-frontend.sh
+```
 
+Changes live in 1-2 minutes after cache invalidation.
+
+---
+
+## 🧪 Test the Deployment
+
+```bash
+cd src/phase3_production
+
+# Set your API endpoint
 export API_ENDPOINT="https://YOUR-ID.execute-api.ap-south-1.amazonaws.com/dev/document"
 
 # Test caching
@@ -43,6 +74,21 @@ python test_phase3.py $API_ENDPOINT
 
 # Test chunking
 python test_phase3_final.py $API_ENDPOINT
+```
+
+---
+
+## 🗑️ Delete Everything
+
+```bash
+# Delete CloudFormation stack (removes all resources)
+aws cloudformation delete-stack \
+  --stack-name doc-generator-phase3 \
+  --region ap-south-1
+
+# Note: S3 bucket must be empty first
+# If deletion fails, empty the frontend bucket:
+aws s3 rm s3://doc-generator-frontend-YOUR-ACCOUNT-ID-dev --recursive
 ```
 
 ---
@@ -56,11 +102,6 @@ python test_phase3_final.py $API_ENDPOINT
 aws logs tail /aws/lambda/doc-generator-phase3-dev \
   --follow \
   --region ap-south-1
-
-# View recent logs
-aws logs tail /aws/lambda/doc-generator-phase3-dev \
-  --since 10m \
-  --region ap-south-1
 ```
 
 ### Check DynamoDB Cache
@@ -71,20 +112,22 @@ aws dynamodb scan \
   --table-name doc-cache-phase3-dev \
   --region ap-south-1 \
   --limit 10
-
-# Count items
-aws dynamodb scan \
-  --table-name doc-cache-phase3-dev \
-  --region ap-south-1 \
-  --select COUNT
 ```
 
-### Delete Stack
+### Invalidate CloudFront Cache
 
 ```bash
-aws cloudformation delete-stack \
+# Get distribution ID
+DIST_ID=$(aws cloudformation describe-stacks \
   --stack-name doc-generator-phase3 \
-  --region ap-south-1
+  --region ap-south-1 \
+  --query 'Stacks[0].Outputs[?OutputKey==`CloudFrontDistributionId`].OutputValue' \
+  --output text)
+
+# Invalidate
+aws cloudfront create-invalidation \
+  --distribution-id $DIST_ID \
+  --paths "/*"
 ```
 
 ---
@@ -93,85 +136,74 @@ aws cloudformation delete-stack \
 
 ### ✅ Always Use `--use-container`
 
-**DON'T:**
+**CORRECT:**
 ```bash
-sam build --template template-phase3.yaml  # ❌ Will fail on macOS
+sam build --template template-phase3.yaml --use-container
 ```
 
-**DO:**
+**WRONG:**
 ```bash
-sam build --template template-phase3.yaml --use-container  # ✅ Works everywhere
+sam build --template template-phase3.yaml  # ❌ Binary dependency errors
 ```
 
 ### ✅ Test Order
 
-1. **Local tests first** (no deployment needed):
+1. **Local tests first** (no deployment):
    ```bash
    python test_chunking_local.py
    python test_retry_logic.py
    ```
 
-2. **Deploy to AWS**:
+2. **Deploy infrastructure**:
    ```bash
    sam build --use-container
    sam deploy
    ```
 
-3. **Test deployed API**:
+3. **Deploy frontend**:
+   ```bash
+   ./deploy-frontend.sh
+   ```
+
+4. **Test deployed API**:
    ```bash
    python test_phase3_final.py $API_ENDPOINT
    ```
 
-### ✅ Avoid AWS Throttling
+### ✅ Stack Already Exists
 
-Your account has a **10 concurrent Lambda limit**.
-
-**DON'T:**
-```bash
-python test_retry_under_load.py $API_ENDPOINT 30 15  # ❌ 15 workers = throttling
-```
-
-**DO:**
-```bash
-python test_retry_under_load.py $API_ENDPOINT 30 5   # ✅ 5 workers = no throttling
-```
-
----
-
-## Cost Monitoring
+If you get "stack already exists" error:
 
 ```bash
-# Check Lambda invocations (last 7 days)
-aws cloudwatch get-metric-statistics \
-  --namespace AWS/Lambda \
-  --metric-name Invocations \
-  --dimensions Name=FunctionName,Value=doc-generator-phase3-dev \
-  --start-time $(date -u -d '7 days ago' +%Y-%m-%dT%H:%M:%S) \
-  --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
-  --period 86400 \
-  --statistics Sum \
-  --region ap-south-1
-```
+# Update existing stack (same command)
+sam deploy --template template-phase3.yaml
 
----
-
-## Troubleshooting Quick Fixes
-
-### Issue: Decimal Serialization Error
-**Solution:** Already fixed in code (decimal_to_float helper)
-
-### Issue: 500 errors under load  
-**Solution:** Reduce concurrent workers to 3-5
-
-### Issue: Binary dependency error
-**Solution:** Use `--use-container` flag
-
-### Issue: Stack already exists
-**Solution:** Delete old stack first
-```bash
+# Or delete and redeploy
 aws cloudformation delete-stack --stack-name doc-generator-phase3
+# Wait for deletion to complete, then deploy again
 ```
 
 ---
 
-**For detailed documentation, see [PHASE3-COMPLETE.md](PHASE3-COMPLETE.md)**
+## 📚 Detailed Documentation
+
+- **[PHASE3-COMPLETE.md](PHASE3-COMPLETE.md)** - Complete Phase 3 guide
+- **[FRONTEND-DEPLOYMENT.md](FRONTEND-DEPLOYMENT.md)** - Frontend deployment details
+- **[S3-CLOUDFRONT-COMPLETE.md](S3-CLOUDFRONT-COMPLETE.md)** - S3 + CloudFront summary
+
+---
+
+## 🎯 Quick Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Binary dependency error | Use `--use-container` flag |
+| Stack outputs not found | Redeploy with updated template |
+| Frontend shows old version | Run `./deploy-frontend.sh` |
+| CORS errors | Already configured, check API endpoint |
+| CloudFront 403 error | Wait 10-15 min for distribution |
+| Cache not working | Check CloudWatch logs |
+
+---
+
+**For detailed guides, see the docs folder!**

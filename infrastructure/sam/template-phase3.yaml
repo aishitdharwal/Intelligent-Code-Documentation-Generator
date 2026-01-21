@@ -5,6 +5,7 @@ Description: >
   
   Production-ready serverless application with:
   - DynamoDB caching (90% cost reduction)
+  - S3 + CloudFront frontend hosting
   - Enhanced monitoring
   - Proper IAM permissions
 
@@ -62,7 +63,7 @@ Resources:
   DocumentationCache:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub 'doc-cache-${Environment}'
+      TableName: !Sub 'doc-cache-phase3-${Environment}'
       BillingMode: PAY_PER_REQUEST  # On-demand pricing
       AttributeDefinitions:
         - AttributeName: file_hash
@@ -230,8 +231,115 @@ Resources:
           ]
         }
 
+  # ========================================================================
+  # FRONTEND: S3 + CloudFront
+  # ========================================================================
+
+  # S3 Bucket for Frontend Hosting (Private - CloudFront access only)
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'doc-generator-frontend-${AWS::AccountId}-${Environment}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: FrontendHosting
+
+  # CloudFront Origin Access Identity (OAI)
+  CloudFrontOriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub 'OAI for doc-generator frontend ${Environment}'
+
+  # S3 Bucket Policy (Allow CloudFront OAI only)
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AllowCloudFrontOAI
+            Effect: Allow
+            Principal:
+              CanonicalUser: !GetAtt CloudFrontOriginAccessIdentity.S3CanonicalUserId
+            Action: 's3:GetObject'
+            Resource: !Sub '${FrontendBucket.Arn}/*'
+
+  # CloudFront Distribution
+  FrontendDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: !Sub 'CDN for doc-generator frontend ${Environment}'
+        Enabled: true
+        DefaultRootObject: index.html
+        PriceClass: PriceClass_100  # US, Canada, Europe (cheapest)
+        
+        # Origin: S3 Bucket
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt FrontendBucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub 'origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}'
+        
+        # Default Cache Behavior
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          CachedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          Compress: true
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+          MinTTL: 0
+          DefaultTTL: 3600      # 1 hour
+          MaxTTL: 86400         # 24 hours
+        
+        # Custom Error Responses
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 300
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 300
+        
+        # Viewer Certificate (default CloudFront cert)
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+      
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: FrontendCDN
+
 # Outputs
 Outputs:
+  # API Outputs
   ApiEndpoint:
     Description: "API Gateway endpoint URL for Phase 3"
     Value: !Sub "https://${DocumentationApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/document"
@@ -265,3 +373,22 @@ Outputs:
     Value: !Ref FunctionLogGroup
     Export:
       Name: !Sub "${AWS::StackName}-LogGroup"
+  
+  # Frontend Outputs
+  FrontendBucketName:
+    Description: "S3 Bucket name for frontend hosting"
+    Value: !Ref FrontendBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-FrontendBucket"
+  
+  FrontendURL:
+    Description: "CloudFront Distribution URL (Frontend)"
+    Value: !Sub "https://${FrontendDistribution.DomainName}"
+    Export:
+      Name: !Sub "${AWS::StackName}-FrontendURL"
+  
+  CloudFrontDistributionId:
+    Description: "CloudFront Distribution ID"
+    Value: !Ref FrontendDistribution
+    Export:
+      Name: !Sub "${AWS::StackName}-DistributionId"
