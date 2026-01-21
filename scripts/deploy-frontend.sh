@@ -15,17 +15,25 @@ NC='\033[0m' # No Color
 # Configuration
 STACK_NAME="doc-generator-phase3"
 REGION="ap-south-1"
-FRONTEND_FILE="../frontend/index.html"
+FRONTEND_DIR="../frontend"
+FRONTEND_FILE="$FRONTEND_DIR/index.html"
+LOGO_FILE="$FRONTEND_DIR/logo.png"
 
 echo -e "${BLUE}======================================${NC}"
 echo -e "${BLUE}Frontend Deployment Script${NC}"
 echo -e "${BLUE}======================================${NC}"
 echo ""
 
-# Check if frontend file exists
+# Check if frontend files exist
 if [ ! -f "$FRONTEND_FILE" ]; then
     echo -e "${RED}Error: Frontend file not found at $FRONTEND_FILE${NC}"
     echo -e "${RED}Make sure you run this script from the scripts/ directory${NC}"
+    exit 1
+fi
+
+if [ ! -f "$LOGO_FILE" ]; then
+    echo -e "${RED}Error: Logo file not found at $LOGO_FILE${NC}"
+    echo -e "${RED}Please make sure logo.png is in the frontend/ directory${NC}"
     exit 1
 fi
 
@@ -74,8 +82,8 @@ sed "s|let API_ENDPOINT = .*|let API_ENDPOINT = '${API_ENDPOINT}';|" "$FRONTEND_
 echo -e "${GREEN}✓ API endpoint injected${NC}"
 echo ""
 
-# Upload to S3
-echo -e "${YELLOW}→ Uploading frontend to S3...${NC}"
+# Upload HTML to S3
+echo -e "${YELLOW}→ Uploading index.html to S3...${NC}"
 aws s3 cp "$TEMP_FILE" "s3://${BUCKET_NAME}/index.html" \
     --region $REGION \
     --content-type "text/html" \
@@ -83,9 +91,25 @@ aws s3 cp "$TEMP_FILE" "s3://${BUCKET_NAME}/index.html" \
     --metadata-directive REPLACE
 
 if [ $? -eq 0 ]; then
-    echo -e "${GREEN}✓ Frontend uploaded successfully${NC}"
+    echo -e "${GREEN}✓ index.html uploaded successfully${NC}"
 else
-    echo -e "${RED}✗ Upload failed${NC}"
+    echo -e "${RED}✗ index.html upload failed${NC}"
+    exit 1
+fi
+echo ""
+
+# Upload logo to S3
+echo -e "${YELLOW}→ Uploading logo.png to S3...${NC}"
+aws s3 cp "$LOGO_FILE" "s3://${BUCKET_NAME}/logo.png" \
+    --region $REGION \
+    --content-type "image/png" \
+    --cache-control "max-age=86400" \
+    --metadata-directive REPLACE
+
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}✓ logo.png uploaded successfully${NC}"
+else
+    echo -e "${RED}✗ logo.png upload failed${NC}"
     exit 1
 fi
 echo ""
